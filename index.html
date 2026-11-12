@@ -4,9 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pangjajap 2026 - QR Attendance</title>
+  <title>Scanner Absensi Pangjajap 2026</title>
 
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
@@ -14,26 +14,26 @@
 
     body {
       margin: 0;
-      padding: 24px 16px;
+      padding: 20px;
       font-family: Arial, sans-serif;
       background: #f1f5f2;
       color: #183b2b;
     }
 
     .container {
-      max-width: 460px;
+      max-width: 480px;
       margin: auto;
-      padding: 24px;
       background: white;
-      border-radius: 18px;
-      box-shadow: 0 4px 20px #0001;
+      padding: 22px;
+      border-radius: 16px;
+      box-shadow: 0 4px 18px #0001;
     }
 
-    h1 { text-align: center; font-size: 24px; }
+    h1 { text-align: center; font-size: 23px; }
     .subtitle {
       text-align: center;
       color: #718078;
-      margin-bottom: 24px;
+      margin-bottom: 25px;
     }
 
     label {
@@ -47,43 +47,46 @@
       padding: 13px;
       border: 1px solid #ccd6cf;
       border-radius: 9px;
-      font-size: 15px;
+      font-size: 16px;
     }
 
     button {
       width: 100%;
       padding: 14px;
-      margin-top: 14px;
-      border: 0;
+      margin-top: 13px;
+      border: none;
       border-radius: 9px;
       background: #176b45;
       color: white;
-      font-weight: bold;
       font-size: 15px;
+      font-weight: bold;
       cursor: pointer;
     }
 
     button.secondary { background: #53665b; }
-    button.danger { background: #a33b3b; }
+    button:disabled { opacity: .6; }
 
-    #reader { width: 100%; margin-top: 20px; }
+    #reader {
+      width: 100%;
+      margin-top: 20px;
+    }
 
     #hasil {
+      white-space: pre-line;
+      overflow-wrap: anywhere;
       margin-top: 18px;
-      padding: 15px;
+      padding: 16px;
       border-radius: 10px;
       background: #f1f4f2;
       line-height: 1.6;
-      overflow-wrap: anywhere;
+      text-align: center;
     }
 
-    .hidden { display: none; }
-
     .small {
-      color: #718078;
       font-size: 12px;
       text-align: center;
-      margin-top: 18px;
+      color: #718078;
+      margin-top: 20px;
     }
   </style>
 </head>
@@ -93,43 +96,19 @@
     <h1>PANGJAJAP 2026</h1>
     <p class="subtitle">QR ATTENDANCE SYSTEM</p>
 
-    <section id="loginSection">
-      <h3>Login Panitia</h3>
+    <label for="eventId">ID Acara</label>
+    <input id="eventId" value="PJP2026">
 
-      <label for="email">Email</label>
-      <input id="email" type="email"
-        placeholder="Email akun panitia">
+    <button id="startBtn" onclick="mulaiScanner()">
+      MULAI SCAN ABSENSI
+    </button>
 
-      <label for="password">Password</label>
-      <input id="password" type="password"
-        placeholder="Password akun panitia">
+    <button class="secondary" onclick="tutupScanner()">
+      TUTUP KAMERA
+    </button>
 
-      <button id="loginBtn" onclick="login()">
-        LOGIN
-      </button>
-    </section>
-
-    <section id="scannerSection" class="hidden">
-      <p id="userInfo"></p>
-
-      <label for="eventId">ID Acara</label>
-      <input id="eventId" value="PJP2026">
-
-      <button onclick="mulaiScanner()">
-        BUKA KAMERA & MULAI SCAN
-      </button>
-
-      <button class="danger" onclick="tutupScanner()">
-        TUTUP KAMERA
-      </button>
-
-      <div id="reader"></div>
-      <div id="hasil">Scanner belum aktif.</div>
-
-      <button class="secondary" onclick="logout()">
-        LOGOUT
-      </button>
-    </section>
+    <div id="reader"></div>
+    <div id="hasil">Scanner siap digunakan.</div>
 
     <p class="small">
       Sistem Absensi Pangjajap 2026
@@ -152,83 +131,11 @@ let scanner = null;
 let scannerAktif = false;
 let sedangMemproses = false;
 
-const loginSection =
-  document.getElementById("loginSection");
-
-const scannerSection =
-  document.getElementById("scannerSection");
-
-const hasil =
-  document.getElementById("hasil");
+const hasil = document.getElementById("hasil");
+const startBtn = document.getElementById("startBtn");
 
 function tampil(pesan) {
   hasil.textContent = pesan;
-}
-
-function tampilIdentitas(user) {
-  loginSection.classList.add("hidden");
-  scannerSection.classList.remove("hidden");
-
-  document.getElementById("userInfo").textContent =
-    "Login sebagai: " + user.email;
-}
-
-async function login() {
-  const email =
-    document.getElementById("email").value.trim();
-
-  const password =
-    document.getElementById("password").value;
-
-  if (!email || !password) {
-    alert("Email dan password harus diisi.");
-    return;
-  }
-
-  const tombol = document.getElementById("loginBtn");
-  tombol.disabled = true;
-  tombol.textContent = "MEMPROSES...";
-
-  const { data, error } =
-    await db.auth.signInWithPassword({
-      email,
-      password
-    });
-
-  tombol.disabled = false;
-  tombol.textContent = "LOGIN";
-
-  if (error) {
-    alert("Login gagal: " + error.message);
-    return;
-  }
-
-  tampilIdentitas(data.user);
-  tampil("Login berhasil. Scanner siap digunakan.");
-}
-
-async function logout() {
-  await tutupScanner();
-
-  const { error } = await db.auth.signOut();
-
-  if (error) {
-    alert("Logout gagal: " + error.message);
-    return;
-  }
-
-  scannerSection.classList.add("hidden");
-  loginSection.classList.remove("hidden");
-  tampil("Silakan login kembali.");
-}
-
-async function cekLogin() {
-  const { data } = await db.auth.getSession();
-
-  if (data.session) {
-    tampilIdentitas(data.session.user);
-    tampil("Login terdeteksi. Scanner siap digunakan.");
-  }
 }
 
 async function mulaiScanner() {
@@ -244,8 +151,9 @@ async function mulaiScanner() {
 
   scanner = new Html5Qrcode("reader");
   scannerAktif = true;
+  startBtn.disabled = true;
 
-  tampil("Meminta akses kamera...");
+  tampil("Mengaktifkan kamera...");
 
   try {
     await scanner.start(
@@ -265,12 +173,14 @@ async function mulaiScanner() {
       () => {}
     );
 
-    tampil("Kamera aktif. Arahkan ke QR mahasiswa.");
+    tampil("KAMERA AKTIF\nArahkan kamera ke QR mahasiswa.");
 
   } catch (error) {
     scannerAktif = false;
     scanner = null;
-    tampil("Kamera gagal dibuka: " + error);
+    startBtn.disabled = false;
+
+    tampil("KAMERA GAGAL DIBUKA\n" + error.message);
   }
 }
 
@@ -278,7 +188,7 @@ async function kirimAbsensi(kodeQR) {
   const eventId =
     document.getElementById("eventId").value.trim();
 
-  tampil("QR terbaca. Memeriksa database...");
+  tampil("QR TERBACA\nMemeriksa database...");
 
   try {
     const { data, error } = await db.rpc(
@@ -289,33 +199,37 @@ async function kirimAbsensi(kodeQR) {
       }
     );
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     if (data.status === "success") {
       tampil(
-        "BERHASIL HADIR\n" +
+        "✓ ABSENSI BERHASIL\n\n" +
         "Nama: " + data.nama + "\n" +
         "NPM: " + data.npm + "\n" +
-        "Prodi: " + data.prodi + "\n" +
+        "Prodi: " + data.prodi + "\n\n" +
         data.message
       );
 
     } else if (data.status === "duplicate") {
       tampil(
-        "SUDAH ABSEN\n" +
+        "⚠ SUDAH ABSEN\n\n" +
         "Nama: " + data.nama + "\n" +
         "NPM: " + data.npm + "\n" +
+        "Prodi: " + data.prodi + "\n\n" +
         data.message
       );
 
     } else {
-      tampil("GAGAL\n" + data.message);
+      tampil(
+        "✕ ABSENSI GAGAL\n\n" + data.message
+      );
     }
 
   } catch (error) {
-    tampil("GAGAL MENGHUBUNGI DATABASE\n" + error.message);
+    tampil(
+      "✕ KONEKSI DATABASE GAGAL\n\n" +
+      error.message
+    );
 
   } finally {
     setTimeout(() => {
@@ -341,11 +255,10 @@ async function tutupScanner() {
   scanner = null;
   scannerAktif = false;
   sedangMemproses = false;
+  startBtn.disabled = false;
 
-  tampil("Kamera ditutup.");
+  tampil("Kamera sudah ditutup.");
 }
-
-cekLogin();
 </script>
 </body>
 </html>
