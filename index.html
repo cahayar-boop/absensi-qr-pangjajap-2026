@@ -4,273 +4,216 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Absensi QR Pangjajap 2026</title>
-
+  <title>PANGJAJAP 2026 - QR Attendance</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
-
   <style>
     * { box-sizing: border-box; }
-
     body {
       margin: 0;
       padding: 24px 16px;
       font-family: Arial, sans-serif;
       background: #f3f6f4;
-      color: #24352c;
+      color: #183b2b;
     }
-
     .container {
       max-width: 480px;
       margin: auto;
       background: white;
       padding: 24px;
       border-radius: 18px;
-      box-shadow: 0 5px 20px #00000010;
+      box-shadow: 0 4px 18px #0001;
     }
-
-    h1 {
-      text-align: center;
-      font-size: 24px;
-      margin-bottom: 5px;
-    }
-
-    .subtitle {
-      text-align: center;
-      color: #777;
-      font-size: 13px;
-      margin-bottom: 24px;
-    }
-
-    label {
-      display: block;
-      font-weight: bold;
-      margin: 15px 0 8px;
-    }
-
+    h1 { text-align: center; font-size: 24px; }
+    .sub { text-align: center; color: #68756d; margin-bottom: 24px; }
+    label { display: block; font-weight: bold; margin: 15px 0 7px; }
     input {
       width: 100%;
       padding: 13px;
-      border: 1px solid #ddd;
+      border: 1px solid #ccd6cf;
       border-radius: 9px;
       font-size: 16px;
     }
-
     button {
       width: 100%;
       padding: 14px;
-      border: none;
+      margin-top: 14px;
+      border: 0;
       border-radius: 9px;
-      font-size: 15px;
+      background: #176b45;
+      color: white;
       font-weight: bold;
+      font-size: 15px;
       cursor: pointer;
-      margin-top: 12px;
     }
-
-    .start { background: #176b43; color: white; }
-    .stop { background: #eeeeee; color: #333; }
+    button.stop { background: #a33b3b; }
     #reader { margin-top: 20px; width: 100%; }
-
-    .result {
+    #hasil {
       margin-top: 18px;
-      padding: 15px;
+      padding: 14px;
       border-radius: 10px;
-      background: #f3f6f4;
-      line-height: 1.7;
-      display: none;
+      background: #f1f4f2;
+      line-height: 1.6;
       overflow-wrap: anywhere;
     }
-
-    .success { border-left: 5px solid #198754; }
-    .error { border-left: 5px solid #dc3545; }
-    .duplicate { border-left: 5px solid #e6a000; }
-
-    .footer {
-      text-align: center;
-      font-size: 11px;
-      color: #999;
-      margin-top: 24px;
-    }
+    .note { color: #68756d; font-size: 12px; margin-top: 18px; }
   </style>
 </head>
-
 <body>
   <main class="container">
     <h1>PANGJAJAP 2026</h1>
-    <p class="subtitle">QR ATTENDANCE SYSTEM</p>
+    <p class="sub">QR ATTENDANCE SYSTEM</p>
 
     <label for="eventId">ID Acara</label>
-    <input id="eventId" value="PJP2026" placeholder="Masukkan ID acara">
+    <input id="eventId" value="PJP2026">
 
-    <button class="start" id="startBtn" onclick="startScanner()">
-      BUKA KAMERA & MULAI SCAN
-    </button>
+    <label for="token">Token Panitia</label>
+    <input id="token" type="password" placeholder="Masukkan token panitia">
 
-    <button class="stop" id="stopBtn" onclick="stopScanner()" disabled>
-      TUTUP KAMERA
-    </button>
+    <button id="startBtn" onclick="mulaiScanner()">BUKA KAMERA & MULAI SCAN</button>
+    <button class="stop" onclick="tutupScanner()">TUTUP KAMERA</button>
 
     <div id="reader"></div>
-
-    <div id="result" class="result"></div>
-
-    <p class="footer">
-      Sistem Absensi QR Pangjajap 2026
+    <div id="hasil">Scanner belum aktif.</div>
+    <p class="note">
+      Gunakan hanya untuk panitia Pangjajap 2026.
+      Jangan membagikan token panitia kepada orang lain.
     </p>
   </main>
 
-  <script>
-    const API_URL =
-      "https://script.google.com/a/macros/student.unsil.ac.id/s/AKfycbwZUSslGqg8Lta0H7wJ6-EK0tWxs_YHzVn173kE_CYa9PObnmQzFDLNAGQ4OSShuAKEsw/exec";
+<script>
+const API_URL =
+  "https://script.google.com/a/macros/student.unsil.ac.id/s/AKfycbwZUSslGqg8Lta0H7wJ6-EK0tWxs_YHzVn173kE_CYa9PObnmQzFDLNAGQ4OSShuAKEsw/exec";
 
-    let scanner = null;
-    let processing = false;
+let scanner = null;
+let sedangMemproses = false;
+let scannerAktif = false;
 
-    function showResult(data) {
-      const box = document.getElementById("result");
+function tampil(pesan) {
+  document.getElementById("hasil").innerHTML = pesan;
+}
 
-      box.style.display = "block";
-      box.className = "result " +
-        (data.status === "success" ? "success" :
-         data.status === "duplicate" ? "duplicate" : "error");
+function mulaiScanner() {
+  const eventId = document.getElementById("eventId").value.trim();
+  const token = document.getElementById("token").value.trim();
 
-      let html = "<strong>" + escapeHTML(data.message || "") + "</strong>";
+  if (!eventId || !token) {
+    tampil("Isi ID acara dan token panitia terlebih dahulu.");
+    return;
+  }
 
-      if (data.nama) {
-        html += "<br>Nama: " + escapeHTML(data.nama);
-        html += "<br>NPM: " + escapeHTML(data.npm || "");
-        if (data.prodi) {
-          html += "<br>Prodi: " + escapeHTML(data.prodi);
-        }
-      }
+  if (scannerAktif) return;
 
-      box.innerHTML = html;
+  scanner = new Html5Qrcode("reader");
+  scannerAktif = true;
+  tampil("Meminta akses kamera...");
+
+  scanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 250, height: 250 } },
+    kodeQR => {
+      if (sedangMemproses) return;
+      sedangMemproses = true;
+      kirimAbsensi(kodeQR);
+    },
+    () => {}
+  ).then(() => {
+    tampil("Kamera aktif. Arahkan ke QR mahasiswa.");
+  }).catch(error => {
+    scannerAktif = false;
+    tampil("Kamera gagal dibuka: " + error);
+  });
+}
+
+function kirimAbsensi(kodeQR) {
+  const eventId = document.getElementById("eventId").value.trim();
+  const token = document.getElementById("token").value.trim();
+  const callbackName = "absensiCallback_" + Date.now();
+
+  tampil("QR terbaca. Memeriksa data mahasiswa...");
+
+  const params = new URLSearchParams({
+    action: "scan",
+    kodeQR: kodeQR,
+    idAcara: eventId,
+    token: token,
+    callback: callbackName
+  });
+
+  const script = document.createElement("script");
+  let selesai = false;
+
+  function bersihkan() {
+    selesai = true;
+    delete window[callbackName];
+    script.remove();
+    clearTimeout(batasWaktu);
+    sedangMemproses = false;
+  }
+
+  window[callbackName] = function(data) {
+    bersihkan();
+
+    if (data.status === "success") {
+      tampil(
+        "<strong>BERHASIL HADIR</strong><br>" +
+        "Nama: " + aman(data.nama) + "<br>" +
+        "NPM: " + aman(data.npm) + "<br>" +
+        "Prodi: " + aman(data.prodi) + "<br>" +
+        aman(data.message)
+      );
+    } else if (data.status === "duplicate") {
+      tampil(
+        "<strong>SUDAH ABSEN</strong><br>" +
+        "Nama: " + aman(data.nama) + "<br>" +
+        "NPM: " + aman(data.npm) + "<br>" +
+        aman(data.message)
+      );
+    } else {
+      tampil("<strong>GAGAL</strong><br>" + aman(data.message));
     }
+  };
 
-    function escapeHTML(value) {
-      return String(value).replace(/[&<>"']/g, char => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;"
-      })[char]);
+  const batasWaktu = setTimeout(() => {
+    if (!selesai) {
+      bersihkan();
+      tampil("Waktu permintaan habis. Periksa koneksi dan Apps Script.");
     }
+  }, 15000);
 
-    function sendAttendance(kodeQR) {
-      const idAcara = document.getElementById("eventId").value.trim();
-
-      if (!idAcara) {
-        showResult({
-          status: "error",
-          message: "ID acara wajib diisi."
-        });
-        processing = false;
-        return;
-      }
-
-      const callbackName =
-        "absensiCallback_" + Date.now();
-
-      const script = document.createElement("script");
-      let timeout;
-
-      window[callbackName] = function(data) {
-        clearTimeout(timeout);
-        script.remove();
-        delete window[callbackName];
-
-        showResult(data);
-        processing = false;
-      };
-
-      script.onerror = function() {
-        clearTimeout(timeout);
-        script.remove();
-        delete window[callbackName];
-
-        showResult({
-          status: "error",
-          message: "Gagal menghubungi server."
-        });
-
-        processing = false;
-      };
-
-      const params = new URLSearchParams({
-        action: "scan",
-        kodeQR: kodeQR,
-        idAcara: idAcara,
-        callback: callbackName
-      });
-
-      script.src = API_URL + "?" + params.toString();
-      document.body.appendChild(script);
-
-      timeout = setTimeout(() => {
-        script.remove();
-        delete window[callbackName];
-
-        showResult({
-          status: "error",
-          message: "Server tidak merespons. Silakan coba lagi."
-        });
-
-        processing = false;
-      }, 20000);
+  script.onerror = function() {
+    if (!selesai) {
+      bersihkan();
+      tampil("Gagal menghubungi server absensi.");
     }
+  };
 
-    async function startScanner() {
-      if (scanner) return;
+  script.src = API_URL + "?" + params.toString();
+  document.body.appendChild(script);
+}
 
-      try {
-        scanner = new Html5Qrcode("reader");
+function aman(teks) {
+  return String(teks ?? "").replace(/[&<>"']/g, karakter => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[karakter]);
+}
 
-        await scanner.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 240, height: 240 }
-          },
-          (decodedText) => {
-            if (processing) return;
-
-            processing = true;
-
-            scanner.pause(true);
-            sendAttendance(decodedText);
-          }
-        );
-
-        document.getElementById("startBtn").disabled = true;
-        document.getElementById("stopBtn").disabled = false;
-
-      } catch (error) {
-        scanner = null;
-
-        showResult({
-          status: "error",
-          message: "Kamera tidak dapat dibuka. Periksa izin kamera dan HTTPS."
-        });
-      }
-    }
-
-    async function stopScanner() {
-      if (!scanner) return;
-
-      try {
-        await scanner.stop();
-        await scanner.clear();
-      } catch (error) {
-        console.log(error);
-      }
-
+function tutupScanner() {
+  if (scanner && scannerAktif) {
+    scanner.stop().then(() => {
+      scanner.clear();
       scanner = null;
-      processing = false;
-
-      document.getElementById("startBtn").disabled = false;
-      document.getElementById("stopBtn").disabled = true;
-    }
-  </script>
+      scannerAktif = false;
+      sedangMemproses = false;
+      tampil("Kamera ditutup.");
+    }).catch(error => {
+      tampil("Gagal menutup kamera: " + error);
+    });
+  }
+}
+</script>
 </body>
 </html>
-
