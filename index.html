@@ -1,1 +1,276 @@
 
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Absensi QR Pangjajap 2026</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px 16px;
+      font-family: Arial, sans-serif;
+      background: #f3f6f4;
+      color: #24352c;
+    }
+
+    .container {
+      max-width: 480px;
+      margin: auto;
+      background: white;
+      padding: 24px;
+      border-radius: 18px;
+      box-shadow: 0 5px 20px #00000010;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #777;
+      font-size: 13px;
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin: 15px 0 8px;
+    }
+
+    input {
+      width: 100%;
+      padding: 13px;
+      border: 1px solid #ddd;
+      border-radius: 9px;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 9px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+
+    .start { background: #176b43; color: white; }
+    .stop { background: #eeeeee; color: #333; }
+    #reader { margin-top: 20px; width: 100%; }
+
+    .result {
+      margin-top: 18px;
+      padding: 15px;
+      border-radius: 10px;
+      background: #f3f6f4;
+      line-height: 1.7;
+      display: none;
+      overflow-wrap: anywhere;
+    }
+
+    .success { border-left: 5px solid #198754; }
+    .error { border-left: 5px solid #dc3545; }
+    .duplicate { border-left: 5px solid #e6a000; }
+
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: #999;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+    <h1>PANGJAJAP 2026</h1>
+    <p class="subtitle">QR ATTENDANCE SYSTEM</p>
+
+    <label for="eventId">ID Acara</label>
+    <input id="eventId" value="PJP2026" placeholder="Masukkan ID acara">
+
+    <button class="start" id="startBtn" onclick="startScanner()">
+      BUKA KAMERA & MULAI SCAN
+    </button>
+
+    <button class="stop" id="stopBtn" onclick="stopScanner()" disabled>
+      TUTUP KAMERA
+    </button>
+
+    <div id="reader"></div>
+
+    <div id="result" class="result"></div>
+
+    <p class="footer">
+      Sistem Absensi QR Pangjajap 2026
+    </p>
+  </main>
+
+  <script>
+    const API_URL =
+      "https://script.google.com/a/macros/student.unsil.ac.id/s/AKfycbwZUSslGqg8Lta0H7wJ6-EK0tWxs_YHzVn173kE_CYa9PObnmQzFDLNAGQ4OSShuAKEsw/exec";
+
+    let scanner = null;
+    let processing = false;
+
+    function showResult(data) {
+      const box = document.getElementById("result");
+
+      box.style.display = "block";
+      box.className = "result " +
+        (data.status === "success" ? "success" :
+         data.status === "duplicate" ? "duplicate" : "error");
+
+      let html = "<strong>" + escapeHTML(data.message || "") + "</strong>";
+
+      if (data.nama) {
+        html += "<br>Nama: " + escapeHTML(data.nama);
+        html += "<br>NPM: " + escapeHTML(data.npm || "");
+        if (data.prodi) {
+          html += "<br>Prodi: " + escapeHTML(data.prodi);
+        }
+      }
+
+      box.innerHTML = html;
+    }
+
+    function escapeHTML(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      })[char]);
+    }
+
+    function sendAttendance(kodeQR) {
+      const idAcara = document.getElementById("eventId").value.trim();
+
+      if (!idAcara) {
+        showResult({
+          status: "error",
+          message: "ID acara wajib diisi."
+        });
+        processing = false;
+        return;
+      }
+
+      const callbackName =
+        "absensiCallback_" + Date.now();
+
+      const script = document.createElement("script");
+      let timeout;
+
+      window[callbackName] = function(data) {
+        clearTimeout(timeout);
+        script.remove();
+        delete window[callbackName];
+
+        showResult(data);
+        processing = false;
+      };
+
+      script.onerror = function() {
+        clearTimeout(timeout);
+        script.remove();
+        delete window[callbackName];
+
+        showResult({
+          status: "error",
+          message: "Gagal menghubungi server."
+        });
+
+        processing = false;
+      };
+
+      const params = new URLSearchParams({
+        action: "scan",
+        kodeQR: kodeQR,
+        idAcara: idAcara,
+        callback: callbackName
+      });
+
+      script.src = API_URL + "?" + params.toString();
+      document.body.appendChild(script);
+
+      timeout = setTimeout(() => {
+        script.remove();
+        delete window[callbackName];
+
+        showResult({
+          status: "error",
+          message: "Server tidak merespons. Silakan coba lagi."
+        });
+
+        processing = false;
+      }, 20000);
+    }
+
+    async function startScanner() {
+      if (scanner) return;
+
+      try {
+        scanner = new Html5Qrcode("reader");
+
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 240, height: 240 }
+          },
+          (decodedText) => {
+            if (processing) return;
+
+            processing = true;
+
+            scanner.pause(true);
+            sendAttendance(decodedText);
+          }
+        );
+
+        document.getElementById("startBtn").disabled = true;
+        document.getElementById("stopBtn").disabled = false;
+
+      } catch (error) {
+        scanner = null;
+
+        showResult({
+          status: "error",
+          message: "Kamera tidak dapat dibuka. Periksa izin kamera dan HTTPS."
+        });
+      }
+    }
+
+    async function stopScanner() {
+      if (!scanner) return;
+
+      try {
+        await scanner.stop();
+        await scanner.clear();
+      } catch (error) {
+        console.log(error);
+      }
+
+      scanner = null;
+      processing = false;
+
+      document.getElementById("startBtn").disabled = false;
+      document.getElementById("stopBtn").disabled = true;
+    }
+  </script>
+</body>
+</html>
+
